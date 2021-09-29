@@ -29,10 +29,18 @@ func worker(id int, jobs <-chan int, results chan<- int) {
 	}
 }
 
-func workerEfficient(id int, jobs <-chan int, results chan<- int) {
+func workerEfficient(id int, jobs <-chan int, results chan<- int, concurrentGoroutines chan struct{}) {
 	// sync.WaitGroup helps us to manage the job
 	var wg sync.WaitGroup
 	for j := range jobs {
+
+		fmt.Printf("ID: %v: waiting to launch!\n", j)
+		// Try to receive from the concurrentGoroutines channel. When we have something,
+		// it means we can start a new goroutine because another one finished.
+		// Otherwise, it will block the execution until an execution
+		// spot is available.
+		<-concurrentGoroutines
+		fmt.Printf("ID: %v: it's my turn!\n", j)
 
 		wg.Add(1)
 		// we start a goroutine to run the job
@@ -43,6 +51,9 @@ func workerEfficient(id int, jobs <-chan int, results chan<- int) {
 			fmt.Println("worker", id, "fnished job", job)
 			results <- job * 2
 			wg.Done()
+
+			// Say that another goroutine can now start.
+			concurrentGoroutines <- struct{}{}
 		}(j)
 
 	}
@@ -55,6 +66,15 @@ func main() {
 	jobs := make(chan int, numbJobs)
 	results := make(chan int, numbJobs)
 
+	// Dummy channel to coordinate the number of concurrent goroutines.
+	// This channel should be buffered otherwise we will be immediately blocked
+	// when trying to fill it.
+	concurrentGoroutines := make(chan struct{}, numbJobs)
+	// Fill the dummy channel with maxNbConcurrentGoroutines empty struct.
+	for i := 0; i < numbJobs; i++ {
+		concurrentGoroutines <- struct{}{}
+	}
+
 	// 1. Start the worker
 	// it is a fixed pool of goroutines receive and perform tasks from a channel
 
@@ -62,7 +82,7 @@ func main() {
 	// they receive the `jobs` from the channel jobs
 	// we also naming the worker name with `w` variable.
 	for w := 1; w <= 3; w++ {
-		go workerEfficient(w, jobs, results)
+		go workerEfficient(w, jobs, results, concurrentGoroutines)
 	}
 
 	// 2. send the work
