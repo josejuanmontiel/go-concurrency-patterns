@@ -11,10 +11,12 @@ import (
 	"time"
 )
 
+const loopIteration = 1
+
 const max = 20
 const chanSize = 2
 
-const feedMilis = 20
+const feedMilis = 200
 const tickerMilis = 500
 const block = 5
 
@@ -140,31 +142,25 @@ func loop(iteration int, wait *sync.WaitGroup, done chan bool) {
 	go func() {
 		for item := range chanOut {
 			for _, _ = range item {
-				// La llamada al exterior... con un batch (item es un array)
-
-				// Usar el channelWait recibido para notificar que tienes la respuesta (tras buscarla en el batch...)
-
-				// Vamos indicando que hemos procesado las respuestas...
 				wait.Done()
 			}
 			fmt.Println(item, " -> Out (", iteration, ")")
 		}
-		// TODO ... revisar esto si se llama desde LOOP...
 		done <- true
 	}()
 }
 
 func main() {
 
-	var done = make(chan bool)
+	var done = make(chan bool, loopIteration)
 	var wait = &sync.WaitGroup{}
 
 	fmt.Println("Waiting")
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < loopIteration; i++ {
 		loop(i, wait, done)
+		<-done
 	}
 
-	<-done
 	fmt.Println("Finish")
 }
